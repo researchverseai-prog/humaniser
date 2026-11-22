@@ -25,6 +25,11 @@ produces worse sentences.
 It also has an **audit mode**: say "just flag the AI tells" and it lists issues and protected spans
 without rewriting.
 
+It can also **check another tool's output.** Paste your source and a paraphraser's or humaniser's
+version, and it lists the meaning damage those tools typically cause: renamed defined terms, changed
+fields, dropped claims, shifted hedges, invisible zero-width characters and spun phrasing. Then it
+rewrites from your source instead.
+
 ## Install
 
 **Claude.ai.** Download [`humaniser.skill`](humaniser.skill), then go to Settings → Capabilities →

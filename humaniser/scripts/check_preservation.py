@@ -30,7 +30,7 @@ LOAD_BEARING = {
     "scope": r"\b(?:all|every|only|most|some|many|few|several|at least|at most|no more than|mainly|largely|primarily)\b",
     "condition": r"\b(?:if|unless|except|provided that|when)\b",
 }
-SENT = re.compile(r"(?<=[.!?])[\"')\]]?\s+(?=[\"'(\[]?[A-Z0-9])")
+SENT = re.compile(r"(?<!\bal\.)(?<!\be\.g\.)(?<!\bi\.e\.)(?<!\bvs\.)(?<!\bcf\.)(?<=[.!?])[\"')\]]?\s+(?=[\"'(\[]?[A-Z0-9])")
 SENT_START_WORDS = {"The", "This", "These", "That", "Those", "It", "In", "A", "An", "For", "To", "But", "And", "So",
                     "However", "First", "Second", "Third", "Finally", "Over", "At", "Such", "Most", "Many", "Some"}
 
@@ -38,6 +38,12 @@ def items(kind, text):
     found = re.findall(HARD[kind], text)
     if kind == "named term":  # drop phrases that are only capitalised because they start a sentence
         found = [f for f in found if f.split()[0] not in SENT_START_WORDS]
+    if kind == "citation":  # compare individual references, so reordering inside brackets is fine
+        refs = []
+        for f in found:
+            inner = f.strip("()[]")
+            refs += [p.strip() for p in re.split(r";\s*", inner) if p.strip()] if f.startswith("(") else [f.strip()]
+        return Counter(refs)
     if kind == "number":
         found = [f.strip().rstrip(",.") for f in found if f.strip().rstrip(",.")]
     return Counter(f.strip() for f in found)
@@ -55,6 +61,10 @@ def staccato(text):
         best = max(best, run)
     return short, best
 
+def renamed(val, new):
+    ow = set(val.lower().split())
+    return any(len(ow & set(nt.lower().split())) >= max(1, len(ow) - 1) for nt in items("named term", new))
+
 def main():
     if len(sys.argv) != 3:
         sys.exit(__doc__)
@@ -69,11 +79,31 @@ def main():
             if n.get(val, 0) >= 1 or (kind == "named term" and val.lower() in new.lower()):
                 kept += 1
             else:
+                if kind == "named term" and renamed(val, new): continue  # reported as RENAMED below
                 (problems if kind != "named term" else notes).append(f"{kind} missing: {val!r}")
         if kind in ("citation", "number", "url/doi"):
             for val in n:
                 if val not in o:
                     problems.append(f"{kind} ADDED (not in original, possible fabrication): {val!r}")
+
+    # a named term that is missing but has a near-match in the revision was probably RENAMED (e.g. by a paraphraser)
+    new_terms = set(items("named term", new))
+    for val in items("named term", orig):
+        if val.lower() in new.lower(): continue
+        ow = set(val.lower().split())
+        for nt in new_terms:
+            nw = set(nt.lower().split())
+            if len(ow & nw) >= max(1, len(ow) - 1) and nt.lower() != val.lower():
+                problems.append(f"named term RENAMED: {val!r} → {nt!r} (a defined term must keep its exact name)")
+                break
+
+    # content words that carried claims in the original and vanished from the revision
+    STOP = set("about above after again against among because before being below between both could during either every first further having other their there these those through under until where which while whose would should might shall since also into from with that this than then they them were been have more most such only very each same some what when your".split())
+    def content(t): return {w for w in re.findall(r"[a-z][a-z-]{4,}", t.lower()) if w not in STOP}
+    co, cn = content(orig), content(new)
+    lost = sorted(w for w in co - cn if not any(x.startswith(w[:6]) for x in cn))
+    if len(lost) >= 3:
+        notes.append(f"{len(lost)} content words from the original are gone; check no claim was dropped: " + ", ".join(lost[:15]) + (" …" if len(lost) > 15 else ""))
 
     for kind, pat in LOAD_BEARING.items():
         o = len(re.findall(pat, orig, re.I)); n = len(re.findall(pat, new, re.I))

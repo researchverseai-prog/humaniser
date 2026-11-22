@@ -21,6 +21,7 @@ analogy flags and you need the reasoning.
 9. Final pass
 10. Register guards (what must survive)
 11. Smallest-repair contract
+12. Damage from paraphrasing ("spinner") tools
 
 ---
 
@@ -223,3 +224,36 @@ suggests, so "suggest" stays. If you can't tell, keep it and mention it under "C
 - **Punctuation, vocabulary or rhythm alone proves neither a defect nor machine authorship.**
 - **Re-read the revision** for negations, conditions, scope, certainty and who-does-what, then stop.
   Don't keep polishing matters of taste.
+
+## 12. Damage from paraphrasing ("spinner") tools
+
+Users sometimes bring text that another humaniser or paraphrasing tool has already rewritten. Those
+tools swap words and restructure sentences without understanding them, so their output fails in a
+predictable way: fluent but wrong. The example below shows the typical damage from one real pass.
+Source: AI-drafted paper summary. Output: a commercial humaniser.
+
+| Source | Tool output | Damage |
+|---|---|---|
+| Algorithmic Information Infrastructure | Artificial Information Infrastructure | **Defined term renamed**, so the framework's name is now wrong |
+| contributes to Information Systems research | contribution to the Communication Systems research area | **Field changed** |
+| institutional credit decision-making | institution credit decisions | Term mangled |
+| …theories explain parts of credit markets yet remain loosely connected | There are many theories that may be relevant to credit markets | **Claim dropped** (the "loosely connected" gap is the paper's motivation) and replaced by a vaguer, hedged one |
+| integrate data infrastructures, algorithmic models, institutional governance and regulatory frameworks | make use of multiple data sources and algorithm models that are particularly important from both governance and regulatory perspectives | **New claim added** ("particularly important"); components dropped |
+| dual impact | affect both sides | Vaguer |
+| Such problems are not purely technical; they can reflect… | Any possible issue is not merely technological, but can also be manifestations of the nature of… | Reframe kept and wordier; "any possible issue" overgeneralises |
+| Combining alternative data and machine learning can improve prediction | The possibility to utilize data and techniques of machine learning helps enhance the ability to predict | "alternative" dropped, so the paper's core variable is gone |
+| foundational digital infrastructure… cross-cutting governance | underlying digital infrastructure and overarching governance frameworks | Framework terms drifted |
+| (none) | en dash, "not only… but also" | New AI tells introduced |
+
+**Tell-tale phrases** (the script flags them as SPUN): make use of, bring about, the possibility to,
+utilise/utilize, helps (to) enhance, any possible issue/problem, as to (theory), manifestations of the
+nature of, provides a contribution to, centred on AI, affects both sides, there are many X that may,
+"To respond to this need" with no need named, grounding the inquiry into, systems of credit, in terms
+of, with regard to, in the context of.
+
+**Other signs of spun text:** a defined term with one word swapped for a synonym; a discipline named
+differently; noun piles where the source had verbs ("the ability to predict"); passive "is presented"
+with no agent; a hedge appearing on a claim the source stated plainly, or vanishing from one it
+hedged; invisible zero-width characters; missing spaces after full stops.
+
+**What to do:** never polish spun text. Diagnose it against the source, then rewrite from the source.

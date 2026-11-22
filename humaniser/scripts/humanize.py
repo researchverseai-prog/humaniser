@@ -14,7 +14,7 @@ Usage:
 import argparse, random, re, statistics, sys
 
 # ---------------------------------------------------------------- text utils
-SENT_RE = re.compile(r'(?<=[.!?])["\')\]]?\s+(?=["\'(\[]?[A-Z0-9])')
+SENT_RE = re.compile(r'(?<!\bal\.)(?<!\be\.g\.)(?<!\bi\.e\.)(?<!\bvs\.)(?<!\bcf\.)(?<=[.!?])["\')\]]?\s+(?=["\'(\[]?[A-Z0-9])')
 
 def split_paragraphs(text):
     return [p.strip() for p in re.split(r'\n\s*\n', text.strip()) if p.strip()]
@@ -73,6 +73,9 @@ OPENERS = [
     (r"At the end of the day,\s*", [""]),
     (r"In other words,\s*", [""]),
     (r"To put this in perspective,\s*", [""]),
+    (r"Addressing (?:this|that|the) (?:gap|issue|challenge|problem),\s*", [""]),
+    (r"Against this backdrop,\s*", [""]),
+    (r"In light of (?:this|these|the above),\s*", [""]),
 ]
 FILLER = [  # anywhere in a sentence: delete and let the note speak for itself
     r"it is (?:important|worth|crucial|essential) to (?:note|mention|remember|highlight|recognize) that\s*",
@@ -238,6 +241,17 @@ REWORD += [  # adapted from OPSHARP/unslop taboo-phrases (MIT)
     (r"\((?:and )?(?:perhaps more importantly|increasingly|arguably|or,? more precisely)[^)]*\)", "parenthetical hedge: own sentence or cut"),
     (r"\b(?:to answer your question|you['’]re asking about|let me think step by step|breaking this down)\b", "chat artifact: delete"),
 ]
+SPINNER = [  # output of synonym-spinning paraphrase tools: wordier AND often wrong
+    (r"\bmake(?:s)? use of\b", "use"), (r"\bbring(?:s)? about\b", "cause / introduce"),
+    (r"\bthe possibility to\b", "cut, or 'can'"), (r"\butili[sz]e[sd]?\b|\butili[sz]ation\b", "use"),
+    (r"\bhelps? (?:to )?enhance\b", "improve(s)"), (r"\bany possible (?:issue|problem)\b", "these problems"),
+    (r"^As to\b|\bas to (?:theory|the)\b", "about / for"), (r"\bmanifestations? of the nature of\b", "reflect(s)"),
+    (r"\bprovides? a contribution to\b", "contributes to"), (r"\b(?:centered|centred) on AI\b", "AI-based"),
+    (r"\baffects? both sides\b", "say which two effects"), (r"\bthere (?:are|is) many [\w ]{1,20} that may\b", "vague: name them or cut"),
+    (r"^To respond to this need\b", "dangling: which need?"), (r"\bgrounding the inquiry into\b", "garbled: say what is examined"),
+    (r"\bin terms of\b", "often padding"), (r"\bwith regard to\b|\bwith respect to\b", "on / for"),
+    (r"\bsystems? of credit\b", "credit systems"), (r"\bin the context of\b", "in"),
+]
 # Academic excess vocabulary: words whose frequency jumped in PubMed abstracts after ChatGPT
 # (Berens & Kobak, Science Advances 2024, via unslop). Soft: legitimate, flag when clustered.
 ACADEMIC_EXCESS = [r"\belucidat\w*", r"\bdelineat\w*", r"\bunderpin\w*", r"\bunveil\w*", r"\binvaluable\b", r"\bnoteworthy\b",
@@ -247,6 +261,8 @@ ACADEMIC_EXCESS = [r"\belucidat\w*", r"\bdelineat\w*", r"\bunderpin\w*", r"\bunv
     r"\bhas been (?:widely )?(?:described|regarded) as\b", r"\bis widely regarded as\b", r"\bobservers have noted\b", r"\bin the realm of\b",
     r"\bcomprehensive(?:ly)?\b", r"\bmultifaceted\b", r"\bnuanced\b", r"\bnotably\b"]
 NEG_PARALLEL = [  # reject-X-then-assert-Y reframes
+    r"\bnot (?:purely|merely|simply|just|only|solely)\b[^.;]{1,80};\s*(?:they|it|this|these|such)\b",
+    r"^Beyond (?:mere |simple |just )?[\w-]+(?: [\w-]+)?,",
     r"\bnot (?:just|only|solely|simply|merely|purely)\b[^.]{1,120}?\b(?:but|instead|rather)\b",
     r"\b(?:is|are|was|were) not (?:a |an |the )?[^.,;]{1,60}[,;] (?:instead|rather)\b",
     r"\b(?:is|are|was|were)n['’]?t (?:just |only |simply )?(?:about )?[^.]{1,60}[.;] (?:it|this|they)(?:['’]s|['’]re| is| are)\b",
@@ -267,7 +283,7 @@ VOCAB = ("delve realm harness unlock tapestry paradigm cutting-edge revolutioniz
          "unprecedented intuitive leading-edge synergize democratize accelerate state-of-the-art dynamic immersive predictive transparent "
          "proprietary integrated plug-and-play turnkey future-proof paradigm-shifting supercharge enduring interplay valuable captivate").split()
 TRIAD = re.compile(r"\b[\w-]+(?: [\w-]+){0,2}, [\w-]+(?: [\w-]+){0,2},? and [\w-]+")
-FIRST_PERSON = re.compile(r"\b(?:I|I'm|I've|my|me|we|our)\b")
+FIRST_PERSON = re.compile(r"\b(?:I|I'm|I've|[Mm]y|me|[Ww]e|[Oo]ur|us)\b")
 NOMINAL = re.compile(r"\b\w+(?:tion|ment|ness|ity|ance|ence)s?\b", re.I)
 
 def flags(pars, mode="academic"):
@@ -302,6 +318,11 @@ def flags(pars, mode="academic"):
                         and not (mode == "academic" and w in TECH_OK)})
         if vocab:
             found.append(("VOCAB", pi, "AI-favoured words, keep only if literally exact: " + ", ".join(vocab)))
+        spun = sorted({f'"{m.group(0)}" → {fix}' for s_ in p for pat, fix in SPINNER for m in [re.search(pat, s_, re.I)] if m})
+        if len(spun) >= 2:
+            found.append(("SPUN", pi, f"{len(spun)} paraphraser-tool phrases (text may have been 'spun'; check meaning against the source): " + "; ".join(spun)))
+        elif spun:
+            found.append(("REWORD", pi, "wordy paraphrase: " + spun[0]))
         acad = sorted({m.group(0).lower() for pat in ACADEMIC_EXCESS for m in re.finditer(pat, ptxt, re.I)})
         if len(acad) >= 2 or (acad and mode == "general"):
             found.append(("ACADEMIC-VOCAB", pi, "post-ChatGPT excess words clustered here (fine alone, tell-tale together): " + ", ".join(acad)))
@@ -363,6 +384,14 @@ def report(before, after, stats, fl, fp, out=sys.stderr):
     for tag, pi, msg in fl: p(f"  [{tag}] ¶{pi}: {msg}")
     if not fl: p("  nothing flagged")
 
+HIDDEN = re.compile("[\u200b-\u200f\u2060-\u2064\ufeff\u00ad]")
+def clean_input(text):
+    """Strip zero-width/invisible characters (used by some 'humaniser' tools) and add missing spaces after full stops."""
+    hidden = len(HIDDEN.findall(text)); text = HIDDEN.sub("", text)
+    glued = re.findall(r"[A-Za-z)\]]{2}[.!?](?=[A-Z])", text)
+    text = re.sub(r"([A-Za-z)\]]{2}[.!?])(?=[A-Z])", r"\1 ", text)
+    return text, hidden, len(glued)
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("input", help="file path or - for stdin")
@@ -376,6 +405,9 @@ def main():
                     help="academic keeps literal technical terms (data-driven, predictive, …) out of VOCAB flags")
     a = ap.parse_args()
     text = sys.stdin.read() if a.input == "-" else open(a.input, encoding="utf-8").read()
+    text, hidden, glued = clean_input(text)
+    if hidden: print(f"[HIDDEN] removed {hidden} invisible characters (zero-width joiners etc.). Some humaniser tools insert these to fool detectors; detectors now flag them. Tell the user.", file=sys.stderr)
+    if glued: print(f"[SPACING] added {glued} missing space(s) after full stops.", file=sys.stderr)
     before = metrics(text)
     if a.analyze_only:
         fl, fp = flags([split_sentences(p) for p in split_paragraphs(text)], a.mode)

@@ -1,6 +1,6 @@
 ---
 name: humaniser
-description: Revise or audit stiff, machine-sounding prose (especially academic and research writing such as literature reviews, abstracts, introductions, methods summaries and theses, but also emails, posts and web copy) so it reads like a careful human wrote it, by varying paragraph and sentence length, cutting formulaic transitions and filler, fixing word-choice errors, removing AI tells (banned vocabulary, bloated verbs, "not X but Y" reframes, post-ChatGPT academic vocabulary, unearned analogies), and then verifying that every citation, number, hedge and negation survived. Runs bundled analysis and preservation-check scripts, then does a hand edit. Use this whenever the user pastes a paragraph and asks to humanise/humanize it, make it less robotic or less AI-sounding, improve flow or readability, "make it sound natural", "de-AI" or "de-slop" it, "remove AI tells", "just flag the AI tells", or says "run the humaniser", even if they just paste text with no instruction after earlier humanising turns.
+description: Revise or audit stiff, machine-sounding prose (especially academic and research writing such as literature reviews, abstracts, introductions, methods summaries and theses, but also emails, posts and web copy) so it reads like a careful human wrote it, by varying paragraph and sentence length, cutting formulaic transitions and filler, fixing word-choice errors, removing AI tells (banned vocabulary, bloated verbs, "not X but Y" reframes, post-ChatGPT academic vocabulary, unearned analogies), and then verifying that every citation, number, hedge and negation survived. Runs bundled analysis and preservation-check scripts, then does a hand edit. Use this whenever the user pastes a paragraph and asks to humanise/humanize it, make it less robotic or less AI-sounding, improve flow or readability, "make it sound natural", "de-AI" or "de-slop" it, "remove AI tells", "just flag the AI tells", or says "run the humaniser". Also use it when the user pastes text from another humaniser or paraphrasing tool (QuillBot-style "spun" text), with or without the source, and asks whether it is OK, what changed, or why it reads oddly. Use it even if they just paste text with no instruction after earlier humanising turns.
 ---
 
 # Humaniser
@@ -22,6 +22,27 @@ Turn uniform, formulaic prose into writing with natural rhythm, while keeping ev
 
 - **Audit:** "just flag it", "don't change anything", "review this before I submit". Run step 2 with `--analyze-only`, read every sentence yourself, and reply with the audit format below. Don't rewrite.
 - **Rewrite:** the default for "humanise this" or a bare pasted paragraph. Follow the full workflow.
+- **Compare tool output:** the user pastes a source text *and* another tool's "humanised" or paraphrased version, or asks "is this version OK?" or "what did this tool change?". Follow "Checking another tool's output" below. Those tools swap synonyms without understanding the text, so they often rename defined terms, change the field, drop claims or shift hedges while sounding fluent.
+
+## Checking another tool's output
+
+1. Save the source as `original.txt` and the tool's version as `spun.txt`. Run:
+   ```bash
+   python3 <skill-dir>/scripts/check_preservation.py original.txt spun.txt
+   python3 <skill-dir>/scripts/humanize.py spun.txt --analyze-only
+   ```
+2. **Meaning damage comes first.**
+   - **`named term RENAMED`:** a defined term was changed, e.g. "Algorithmic" → "Artificial Information Infrastructure". Always blocking.
+   - **Missing citations or numbers.**
+   - **The dropped-content-words list:** read the source sentences those words came from and say which claims vanished.
+   - **Changed hedge, scope or negation counts.**
+   - **Things no script sees:** read both versions side by side for a changed field or discipline ("Information Systems" → "Communication Systems"), reversed or weakened claims, and new claims the source never made ("particularly important from governance perspectives").
+3. **Then the style damage.** `[SPUN]` flags paraphraser phrasing ("make use of", "bring about", "the possibility to utilise", "Any possible issue", "As to theory", "provides a contribution to"). The tool usually keeps or adds the AI tells it was meant to remove ("not only… but also", "not merely X, but"), so check `[REFRAME]` too.
+4. **Respond:**
+   - **A table:** source wording | tool's wording | what changed in meaning.
+   - **A verdict:** usually "don't use this version".
+   - **A clean revision built from the source,** not from the spun text, following the normal rewrite workflow.
+   - **One sentence of advice:** paraphrasing tools trade meaning for surface variation, and invisible characters or spun phrasing are themselves things reviewers and detectors now notice.
 
 ## Workflow (rewrite)
 
@@ -33,6 +54,7 @@ Turn uniform, formulaic prose into writing with natural rhythm, while keeping ev
    - **Mode:** add `--mode general` for non-academic text.
    - **Report:** it goes to stderr: before/after metrics, the changes made, and a NEEDS YOU list.
    - **Paragraph reshaping:** off by default because it misfires. Do paragraph structure by hand.
+   - **Input cleaning:** the script strips invisible characters (zero-width joiners and similar) and adds missing spaces after full stops ("governance.AI"). It reports `[HIDDEN]` and `[SPACING]`. Always tell the user about `[HIDDEN]`: some humaniser tools insert these characters to fool detectors, and detectors now flag them. Strip them from `original.txt` too before step 6, so the comparison is fair.
 3. **Check the script's output before trusting it.** Its edits are rule-based and can misfire, for example lowercasing a name after a removed opener, or a swapped connector ("And…") that reads flat. When it barely changes anything, which is common with academic text, say so plainly.
 4. **Hand edit**, starting from the original (not the script output, if the script's changes were poor).
    - **Read every sentence yourself.** Phrase lists are incomplete, so recognise padding by what it does.
@@ -111,6 +133,12 @@ Report tags:
 - `[DASH]` em/en dash
 - `[READ-ALOUD]` long or noun-heavy sentence
 - `[VOICE]` no first-person markers
+- `[SPUN]` two or more paraphraser-tool phrases in a paragraph: the text was probably run through a synonym spinner, so check its meaning against the source
+- `[HIDDEN]` / `[SPACING]` invisible characters removed, or missing spaces after full stops added
+
+`check_preservation.py` adds:
+- `named term RENAMED` (blocking): a capitalised term reappears with a word changed.
+- A list of dropped content words, which points to claims that may have vanished.
 
 Flags are prompts for judgement, not verdicts: "not only X but also Y" can be a legitimate scope statement in a methods section.
 
